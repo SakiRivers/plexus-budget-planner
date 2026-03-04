@@ -1814,20 +1814,35 @@ function initApp(hasState) {
   updatePlanner();
 }
 
-// Try loading from server first, then fall back to localStorage
+// Init with defaults immediately so page isn't blank
+initApp(false);
+
+// Then try loading saved data (server first, then localStorage)
 (async () => {
-  const serverLoaded = await loadFromServer();
-  if (serverLoaded) {
-    console.log('Loaded data from server');
-    initApp(true);
-  } else {
-    const localLoaded = loadFromLocalStorage();
-    console.log(localLoaded ? 'Loaded data from localStorage' : 'No saved data, starting fresh');
-    initApp(localLoaded);
-    // If we loaded from localStorage but server was empty, push data up
-    if (localLoaded) {
-      console.log('Pushing localStorage data to server...');
-      saveToServer(getSerializableState());
+  let loaded = false;
+  try {
+    const res = await fetch('/api/data');
+    const json = await res.json();
+    if (json.ok && json.data && json.data.version) {
+      loaded = applyState(json.data);
+      if (loaded) {
+        console.log('Loaded data from server');
+        initApp(true);
+        return;
+      }
     }
+  } catch (e) {
+    console.warn('Server load failed:', e);
+  }
+
+  // Fall back to localStorage
+  const localLoaded = loadFromLocalStorage();
+  if (localLoaded) {
+    console.log('Loaded data from localStorage');
+    initApp(true);
+    // Push to server if server was empty
+    saveToServer(getSerializableState());
+  } else {
+    console.log('No saved data found');
   }
 })();
