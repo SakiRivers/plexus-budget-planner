@@ -185,6 +185,7 @@ const deals2526 = [
   { date:'Jan 26', company:'Arena Entertainment', role:'Chief Blockchain Architect', fee:35795, source:'ChatGPT', consultant:'Olly' },
   { date:'Nov 25', company:'FortyIQ', role:'Senior Copywriter', fee:2475, source:'Twitter', consultant:'Will' },
   { date:'Oct 25', company:'Sherlock Protocol', role:'Senior Python Engineer', fee:36300, source:'EthCC', consultant:'Jayden' },
+  { date:'Oct 25', company:'Perle', role:'Community Lead', fee:4121, source:'Telegram', consultant:'Josh' },
   { date:'Sep 25', company:'The Kollab', role:'Head of BD APAC', fee:23340, source:'Google', consultant:'Sigrid' },
   { date:'Sep 25', company:'The Kollab', role:'BDM', fee:8870, source:'Google', consultant:'Sigrid' },
   { date:'Sep 25', company:'Oshi', role:'IP Licensing Manager', fee:15524, source:'Google', consultant:'Jay' },
@@ -229,6 +230,7 @@ const SOURCE_TO_CATEGORY = {
   'Report Lead':  'content',
   'Email':        'content',
   'Farcaster':    'content',
+  'Telegram':     'content',
   'Mondao':       'events',
   'Referral':     null,       // organic — no direct spend
   'Inbound':      null,
