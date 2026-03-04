@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plexus Marketing Budget Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            plx: {
+              bg: '#efefef', card: '#ffffff', border: '#d6d6df',
+              text: '#454559', dim: '#7a7a8e',
+              blue: '#414bc8', teal: '#92cec1', green: '#2ba88a',
+              red: '#c0415d', purple: '#7b6fa6', orange: '#e8825c',
+              pink: '#d7b4c0', navy: '#454559', lime: '#e6fc9b',
+              sky: '#5b9bd5',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; background: #efefef; color: #454559; }
+    .card { background: #ffffff; border: 1px solid #d6d6df; border-radius: 16px; box-shadow: 0 1px 3px rgba(69,69,89,0.06); }
+    .kpi-card { position: relative; overflow: hidden; }
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .slider-track { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; outline: none; background: #d6d6df; }
+    .slider-track::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(69,69,89,0.25); }
+    .slider-track.locked { opacity: 0.5; pointer-events: none; }
+    .slider-track.locked::-webkit-slider-thumb { cursor: not-allowed; }
+    .tab-btn { transition: all 0.2s; }
+    .tab-btn.active { background: rgba(65, 75, 200, 0.08); border-color: #414bc8; color: #414bc8; font-weight: 600; }
+    .lock-btn { transition: all 0.15s; }
+    .lock-btn.locked { background: #414bc8; color: white; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d6d6df; border-radius: 3px; }
+    select option { background: #fff; }
+    .over-budget { color: #c0415d; }
+    .under-budget { color: #2ba88a; }
+    .badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 9999px; font-weight: 700; }
+    .badge-over { background: rgba(192,65,93,0.1); color: #c0415d; }
+    .badge-under { background: rgba(43,168,138,0.1); color: #2ba88a; }
+    .editable-cell { cursor: pointer; transition: background 0.15s; border-radius: 4px; padding: 2px 4px; }
+    .editable-cell:hover { background: rgba(65, 75, 200, 0.1); }
+    .editable-cell[data-month] { background: rgba(232, 130, 92, 0.06); border: 1px dashed rgba(232, 130, 92, 0.25); min-width: 36px; display: inline-block; text-align: right; }
+    .editable-cell[data-month]:hover { background: rgba(232, 130, 92, 0.15); border-color: rgba(232, 130, 92, 0.5); }
+    .editable-cell[data-budget-month] { background: rgba(65, 75, 200, 0.06); border: 1px dashed rgba(65, 75, 200, 0.2); min-width: 36px; display: inline-block; text-align: right; }
+    .editable-cell[data-budget-month]:hover { background: rgba(65, 75, 200, 0.12); border-color: rgba(65, 75, 200, 0.5); }
+    .editable-cell input { width: 60px; text-align: right; font-family: ui-monospace, monospace; font-size: 11px; border: 1px solid #414bc8; border-radius: 4px; padding: 1px 4px; outline: none; background: white; }
+    .editable-cell input[type="text"] { width: 120px; text-align: left; font-family: system-ui, sans-serif; }
+    .detail-action-btn { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid transparent; color: #7a7a8e; cursor: pointer; transition: all 0.15s; background: none; }
+    .detail-action-btn:hover { border-color: #414bc8; color: #414bc8; }
+    .detail-action-btn.active { background: rgba(65,75,200,0.1); color: #414bc8; border-color: #414bc8; }
+    .detail-action-btn[data-action="delete"]:hover { border-color: #c0415d; color: #c0415d; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Header -->
+  <header class="border-b border-plx-border px-6 py-4 bg-white">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div>
+          <h1 class="text-xl font-extrabold text-plx-text tracking-tight">Plexus <span class="text-plx-blue">Budget Planner</span></h1>
+          <p class="text-xs text-plx-dim mt-0.5">Marketing Budget Analysis & Planning Tool</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="saveIndicator" class="text-xs text-plx-green font-medium opacity-0 transition-opacity duration-300">Saved</span>
+        <button id="btnImport" class="text-xs px-3 py-1.5 rounded-lg border border-plx-border text-plx-dim hover:text-plx-text hover:border-plx-blue transition-colors" title="Import saved data from JSON file">
+          <svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Import
+        </button>
+        <button id="btnExport" class="text-xs px-3 py-1.5 rounded-lg border border-plx-border text-plx-dim hover:text-plx-text hover:border-plx-blue transition-colors" title="Export data as JSON file (save to Google Drive for cloud access)">
+          <svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Export
+        </button>
+        <select id="yearSelect" class="text-sm px-3 py-1.5 rounded-lg bg-white text-plx-text border border-plx-border outline-none cursor-pointer font-medium">
+          <option value="2026">FY 2025/26 (Current)</option>
+          <option value="2024-45k">FY 2023/24</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="border-b border-plx-border px-6 bg-white">
+    <div class="max-w-7xl mx-auto flex gap-1 py-2">
+      <button class="tab-btn active text-sm px-4 py-2 rounded-lg border border-transparent text-plx-dim" data-tab="planner">Budget Modelling</button>
+      <button class="tab-btn text-sm px-4 py-2 rounded-lg border border-transparent text-plx-dim" data-tab="tracking">Actual vs Budget</button>
+      <button class="tab-btn text-sm px-4 py-2 rounded-lg border border-transparent text-plx-dim" data-tab="details">Monthly Tracker</button>
+      <button class="tab-btn text-sm px-4 py-2 rounded-lg border border-transparent text-plx-dim" data-tab="roi">ROI Analysis</button>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="max-w-7xl mx-auto px-6 py-6">
+    <!-- BUDGET MODELLING TAB -->
+    <div id="tab-planner" class="tab-content">
+      <!-- Total Budget Control -->
+      <div class="card p-5 mb-6 kpi-card" style="--accent: #414bc8;">
+        <div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-blue"></div>
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="text-xs font-bold text-plx-dim uppercase tracking-wider">FY 2026/27 — Budget Model</div>
+            <div class="text-3xl font-extrabold text-plx-text mt-1" id="totalBudgetDisplay">--</div>
+            <div class="text-[11px] text-plx-dim mt-0.5">Based on FY 2025/26 budget as starting point</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <div class="text-xs text-plx-dim">Allocated</div>
+              <div class="text-lg font-bold text-plx-blue" id="totalAllocated">--</div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-plx-dim">Remaining</div>
+              <div class="text-lg font-bold" id="totalRemaining">--</div>
+            </div>
+            <div class="text-right border-l border-plx-border pl-3">
+              <div class="text-xs text-plx-dim">FY 25/26 Budget</div>
+              <div class="text-lg font-bold text-plx-dim" id="refBudgetTotal">--</div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-plx-dim">FY 25/26 Actual</div>
+              <div class="text-lg font-bold text-plx-orange" id="refActualTotal">--</div>
+            </div>
+            <button id="btnApplyBudget" class="ml-3 px-4 py-2 rounded-lg bg-plx-blue text-white text-xs font-bold hover:opacity-90 transition-opacity" title="Save this model as the FY 2026/27 budget for tracking">
+              <svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Apply as FY 26/27 Budget
+            </button>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-xs text-plx-dim font-mono w-16">£0</span>
+          <input type="range" id="totalBudgetSlider" min="10000" max="100000" step="1000"
+            class="flex-1 slider-track" />
+          <span class="text-xs text-plx-dim font-mono w-20 text-right">£100,000</span>
+          <input type="number" id="totalBudgetInput" step="1000" min="10000" max="500000"
+            class="w-28 text-right text-sm font-mono border border-plx-border rounded-lg px-3 py-1.5 text-plx-text outline-none focus:border-plx-blue" />
+        </div>
+      </div>
+
+      <!-- Allocation bar -->
+      <div class="card p-4 mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-plx-dim uppercase tracking-wider">Budget Allocation</span>
+          <span class="text-xs font-mono text-plx-dim" id="allocationPct">0%</span>
+        </div>
+        <div class="w-full h-3 bg-plx-bg rounded-full overflow-hidden flex" id="allocationBar"></div>
+        <div class="flex gap-3 mt-3 flex-wrap" id="allocationLegend"></div>
+      </div>
+
+      <!-- Sliders + Chart -->
+      <div class="grid lg:grid-cols-5 gap-6">
+        <div class="lg:col-span-3 space-y-3" id="slidersContainer"></div>
+        <div class="lg:col-span-2">
+          <div class="card p-5 sticky top-6">
+            <div class="text-sm font-bold text-plx-text mb-4">Budget Distribution</div>
+            <canvas id="pieChart" height="280"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRACKING TAB -->
+    <div id="tab-tracking" class="tab-content hidden">
+      <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-blue"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Year Budget</p><p class="text-2xl font-extrabold text-plx-text mt-1" id="trackBudget">--</p></div>
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-orange"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Actual Spent</p><p class="text-2xl font-extrabold text-plx-orange mt-1" id="trackActual">--</p></div>
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-green"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Variance</p><p class="text-2xl font-extrabold mt-1" id="trackVariance">--</p></div>
+      </div>
+      <div class="grid lg:grid-cols-3 gap-6 mb-6">
+        <div class="lg:col-span-2 card p-5">
+          <div class="text-sm font-bold text-plx-text mb-1">Cumulative Spend Tracker</div>
+          <div class="text-[11px] text-plx-dim mb-4">Planned budget run rate vs actual spend — are we on track?</div>
+          <canvas id="trackingChart" height="200"></canvas>
+        </div>
+        <div class="card p-5">
+          <div class="text-sm font-bold text-plx-text mb-1">Spend by Category</div>
+          <div class="text-[11px] text-plx-dim mb-4">Where the money is going</div>
+          <canvas id="trackingDonut" height="220"></canvas>
+        </div>
+      </div>
+      <div class="card p-5 overflow-x-auto">
+        <div class="text-sm font-bold text-plx-text mb-4">Category Breakdown</div>
+        <table class="w-full text-sm">
+          <thead><tr class="text-plx-dim text-xs uppercase"><th class="text-left py-2 pr-4">Category</th><th class="text-right py-2 px-2">Budget</th><th class="text-right py-2 px-2">Actual</th><th class="text-right py-2 px-2">Variance</th><th class="text-right py-2 px-2">% Used</th><th class="py-2 pl-3 text-left" style="min-width:120px">Progress</th></tr></thead>
+          <tbody id="trackingTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ROI ANALYSIS TAB -->
+    <div id="tab-roi" class="tab-content hidden">
+      <!-- KPI Cards -->
+      <div class="grid md:grid-cols-4 gap-4 mb-6">
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-green"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Revenue from Deals</p><p class="text-2xl font-extrabold text-plx-green mt-1" id="roiRevenue">--</p><p class="text-[11px] text-plx-dim mt-0.5" id="roiDealCount">--</p></div>
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-orange"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Marketing Spend</p><p class="text-2xl font-extrabold text-plx-orange mt-1" id="roiSpend">--</p><p class="text-[11px] text-plx-dim mt-0.5" id="roiSpendNote">Actual spend year-to-date</p></div>
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px] bg-plx-blue"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Overall ROI</p><p class="text-2xl font-extrabold text-plx-blue mt-1" id="roiOverall">--</p><p class="text-[11px] text-plx-dim mt-0.5">Revenue ÷ Marketing Spend</p></div>
+        <div class="card p-5 kpi-card"><div class="absolute top-0 left-0 right-0 h-[3px]" style="background:#7b6fa6"></div><p class="text-xs font-bold text-plx-dim uppercase tracking-wider">Cost per Deal</p><p class="text-2xl font-extrabold mt-1" style="color:#7b6fa6" id="roiCostPerDeal">--</p><p class="text-[11px] text-plx-dim mt-0.5">Total spend ÷ deals closed</p></div>
+      </div>
+
+      <!-- Chart + ROI Table side by side -->
+      <div class="grid lg:grid-cols-3 gap-6 mb-6">
+        <div class="card p-5">
+          <div class="text-sm font-bold text-plx-text mb-1">Revenue by Source</div>
+          <div class="text-[11px] text-plx-dim mb-4">Deal fees grouped by original lead source</div>
+          <canvas id="roiSourceChart" height="260"></canvas>
+        </div>
+        <div class="lg:col-span-2 card p-5 overflow-x-auto">
+          <div class="text-sm font-bold text-plx-text mb-4">ROI by Category</div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-plx-dim text-xs uppercase">
+              <th class="text-left py-2 pr-4">Category</th>
+              <th class="text-right py-2 px-2">Budget</th>
+              <th class="text-right py-2 px-2">Actual Spend</th>
+              <th class="text-right py-2 px-2">Revenue</th>
+              <th class="text-right py-2 px-2">Deals</th>
+              <th class="text-right py-2 px-2">ROI</th>
+              <th class="text-right py-2 px-2">Cost/Deal</th>
+              <th class="py-2 pl-3 text-left" style="min-width:80px">Efficiency</th>
+            </tr></thead>
+            <tbody id="roiCategoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Deal Register -->
+      <div class="card p-5 overflow-x-auto">
+        <div class="flex items-center justify-between mb-4">
+          <div class="text-sm font-bold text-plx-text">Deal Register</div>
+          <div class="text-[11px] text-plx-dim">Source data from Plexus Pipeline Dashboard</div>
+        </div>
+        <table class="w-full text-sm">
+          <thead><tr class="text-plx-dim text-xs uppercase">
+            <th class="text-left py-2 pr-3">Date</th>
+            <th class="text-left py-2 pr-3">Company</th>
+            <th class="text-left py-2 pr-3">Role</th>
+            <th class="text-right py-2 px-2">Fee</th>
+            <th class="text-left py-2 px-2">Source</th>
+            <th class="text-left py-2 px-2">Category</th>
+            <th class="text-left py-2 px-2">Consultant</th>
+          </tr></thead>
+          <tbody id="roiDealBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DETAILS TAB -->
+    <div id="tab-details" class="tab-content hidden">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <label class="text-sm text-plx-dim font-medium">Category:</label>
+          <select id="detailCategory" class="text-sm px-3 py-1.5 rounded-lg bg-white text-plx-text border border-plx-border outline-none cursor-pointer font-medium"></select>
+        </div>
+      </div>
+      <div id="categoryBudgetBar" class="card p-4 mb-4"></div>
+      <div class="card p-5 overflow-x-auto">
+        <div class="flex items-center justify-between mb-4">
+          <div class="text-sm font-bold text-plx-text">Line Items</div>
+          <div class="flex items-center gap-3">
+            <span class="text-[11px] text-plx-dim">Click any cell to edit</span>
+            <button id="addItemBtn" class="text-xs px-3 py-1.5 rounded-lg bg-plx-blue text-white font-medium hover:opacity-90 transition-opacity">+ Add Item</button>
+          </div>
+        </div>
+        <div id="detailTable"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

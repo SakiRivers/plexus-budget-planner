@@ -1,0 +1,11 @@
+{
+  "name": "plexus-budget-planner",
+  "version": "1.0.0",
+  "description": "Plexus Marketing Budget Analysis & Planning Tool",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
