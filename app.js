@@ -1824,5 +1824,10 @@ function initApp(hasState) {
     const localLoaded = loadFromLocalStorage();
     console.log(localLoaded ? 'Loaded data from localStorage' : 'No saved data, starting fresh');
     initApp(localLoaded);
+    // If we loaded from localStorage but server was empty, push data up
+    if (localLoaded) {
+      console.log('Pushing localStorage data to server...');
+      saveToServer(getSerializableState());
+    }
   }
 })();
