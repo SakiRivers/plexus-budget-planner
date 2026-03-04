@@ -1480,10 +1480,41 @@ function applyState(state) {
 
 function saveToLocalStorage() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()));
+    const state = getSerializableState();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     showSaveIndicator();
+    // Also sync to server (fire-and-forget, debounced)
+    saveToServer(state);
   } catch (e) {
     console.warn('Failed to save to localStorage:', e);
+  }
+}
+
+let _serverSaveTimer = null;
+function saveToServer(state) {
+  clearTimeout(_serverSaveTimer);
+  _serverSaveTimer = setTimeout(() => {
+    fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    }).then(r => r.json()).then(res => {
+      if (res.ok) console.log('Synced to server');
+    }).catch(e => console.warn('Server sync failed (offline?):', e));
+  }, 500);
+}
+
+async function loadFromServer() {
+  try {
+    const res = await fetch('/api/data');
+    const json = await res.json();
+    if (json.ok && json.data) {
+      return applyState(json.data);
+    }
+    return false;
+  } catch (e) {
+    console.warn('Could not load from server:', e);
+    return false;
   }
 }
 
@@ -1771,15 +1802,27 @@ document.getElementById('btnImport')?.addEventListener('click', importData);
 // ========== INIT ==========
 Chart.defaults.font.family = 'system-ui, Avenir, Helvetica, Arial, sans-serif';
 
-// Try loading saved state first
-const hasState = loadFromLocalStorage();
-if (hasState) {
-  initSlidersFromState();
-  // Restore year selector
-  const yearSelect = document.getElementById('yearSelect');
-  if (yearSelect && datasets[currentYear]) yearSelect.value = currentYear;
-} else {
-  initSliders();
+function initApp(hasState) {
+  if (hasState) {
+    initSlidersFromState();
+    const yearSelect = document.getElementById('yearSelect');
+    if (yearSelect && datasets[currentYear]) yearSelect.value = currentYear;
+  } else {
+    initSliders();
+  }
+  syncTotalBudgetUI();
+  updatePlanner();
 }
-syncTotalBudgetUI();
-updatePlanner();
+
+// Try loading from server first, then fall back to localStorage
+(async () => {
+  const serverLoaded = await loadFromServer();
+  if (serverLoaded) {
+    console.log('Loaded data from server');
+    initApp(true);
+  } else {
+    const localLoaded = loadFromLocalStorage();
+    console.log(localLoaded ? 'Loaded data from localStorage' : 'No saved data, starting fresh');
+    initApp(localLoaded);
+  }
+})();
