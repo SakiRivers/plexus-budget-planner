@@ -1483,9 +1483,8 @@ function saveToLocalStorage() {
     const state = getSerializableState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     showSaveIndicator();
-    // Also sync to server and Google Sheets (fire-and-forget, debounced)
+    // Also sync to server (which handles Google Sheets sync too)
     saveToServer(state);
-    syncToGoogleSheets(state);
   } catch (e) {
     console.warn('Failed to save to localStorage:', e);
   }
@@ -1627,48 +1626,6 @@ function exportSpreadsheet() {
   a.download = `plexus-budget-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-// ========== GOOGLE SHEETS SYNC ==========
-let _sheetsSyncTimer = null;
-function syncToGoogleSheets(state) {
-  const SHEETS_URL = window.GOOGLE_SHEETS_WEBHOOK;
-  if (!SHEETS_URL) return;
-
-  clearTimeout(_sheetsSyncTimer);
-  _sheetsSyncTimer = setTimeout(() => {
-    // Build flat rows for the sheet
-    const rows = [];
-    const yearLabels = { '2026': 'FY 2025-26', '2024-45k': 'FY 2024-25', '2027': 'FY 2026-27' };
-
-    Object.keys(state.data || {}).forEach(yearKey => {
-      const yearLabel = yearLabels[yearKey] || yearKey;
-      const yearSnap = state.data[yearKey];
-
-      Object.entries(yearSnap).forEach(([catKey, catSnap]) => {
-        Object.entries(catSnap.items || {}).forEach(([name, item]) => {
-          rows.push({
-            year: yearLabel,
-            category: CAT_LABELS[catKey] || catKey,
-            item: name,
-            budget: item.budget || 0,
-            actual: item.actual || 0,
-            variance: (item.budget || 0) - (item.actual || 0),
-            monthlyBudget: item.monthlyBudget || [],
-            monthlyActual: item.monthlyActual || [],
-          });
-        });
-      });
-    });
-
-    fetch(SHEETS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timestamp: new Date().toISOString(), rows }),
-      mode: 'no-cors',
-    }).then(() => console.log('Synced to Google Sheets'))
-      .catch(e => console.warn('Google Sheets sync failed:', e));
-  }, 2000);
 }
 
 // Init sliders from restored state (without resetting sliderValues)
@@ -1920,13 +1877,6 @@ initApp(false);
 
 // Then try loading config + saved data (server first, then localStorage)
 (async () => {
-  // Load config (Google Sheets webhook URL etc)
-  try {
-    const cfgRes = await fetch('/api/config');
-    const cfg = await cfgRes.json();
-    if (cfg.sheetsWebhook) window.GOOGLE_SHEETS_WEBHOOK = cfg.sheetsWebhook;
-  } catch (e) { /* config optional */ }
-
   let loaded = false;
   try {
     const res = await fetch('/api/data');
