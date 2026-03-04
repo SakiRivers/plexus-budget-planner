@@ -1483,8 +1483,9 @@ function saveToLocalStorage() {
     const state = getSerializableState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     showSaveIndicator();
-    // Also sync to server (fire-and-forget, debounced)
+    // Also sync to server and Google Sheets (fire-and-forget, debounced)
     saveToServer(state);
+    syncToGoogleSheets(state);
   } catch (e) {
     console.warn('Failed to save to localStorage:', e);
   }
@@ -1569,6 +1570,105 @@ function importData() {
     reader.readAsText(file);
   });
   input.click();
+}
+
+// ========== SPREADSHEET EXPORT ==========
+function exportSpreadsheet() {
+  const YEAR_LABELS = { '2026': 'FY 2025-26', '2024-45k': 'FY 2024-25', '2027': 'FY 2026-27' };
+  const rows = [];
+
+  // Header row
+  const header = ['Year', 'Category', 'Item', 'Annual Budget', 'Annual Actual', 'Variance'];
+  MONTHS.forEach(m => { header.push(m + ' Budget'); header.push(m + ' Actual'); });
+  rows.push(header);
+
+  // Data rows for each year
+  Object.keys(datasets).forEach(yearKey => {
+    const yearLabel = YEAR_LABELS[yearKey] || yearKey;
+    const yearData = datasets[yearKey];
+
+    CAT_KEYS.forEach(catKey => {
+      const cat = yearData.categories[catKey];
+      if (!cat) return;
+
+      // Category subtotal row
+      const catRow = [yearLabel, CAT_LABELS[catKey], '(Category Total)', cat.budget, cat.actual, cat.budget - cat.actual];
+      for (let m = 0; m < 12; m++) {
+        catRow.push(cat.monthlyBudget?.[m] || 0);
+        catRow.push(cat.monthlyActual?.[m] || 0);
+      }
+      rows.push(catRow);
+
+      // Individual items
+      Object.entries(cat.items || {}).forEach(([name, item]) => {
+        const itemRow = [yearLabel, CAT_LABELS[catKey], name, item.budget, item.actual, item.budget - item.actual];
+        for (let m = 0; m < 12; m++) {
+          itemRow.push(item.monthlyBudget?.[m] || 0);
+          itemRow.push(item.monthlyActual?.[m] || 0);
+        }
+        rows.push(itemRow);
+      });
+    });
+  });
+
+  // Build CSV
+  const csv = rows.map(row =>
+    row.map(cell => {
+      const str = String(cell);
+      return str.includes(',') || str.includes('"') || str.includes('\n')
+        ? '"' + str.replace(/"/g, '""') + '"' : str;
+    }).join(',')
+  ).join('\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `plexus-budget-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ========== GOOGLE SHEETS SYNC ==========
+let _sheetsSyncTimer = null;
+function syncToGoogleSheets(state) {
+  const SHEETS_URL = window.GOOGLE_SHEETS_WEBHOOK;
+  if (!SHEETS_URL) return;
+
+  clearTimeout(_sheetsSyncTimer);
+  _sheetsSyncTimer = setTimeout(() => {
+    // Build flat rows for the sheet
+    const rows = [];
+    const yearLabels = { '2026': 'FY 2025-26', '2024-45k': 'FY 2024-25', '2027': 'FY 2026-27' };
+
+    Object.keys(state.data || {}).forEach(yearKey => {
+      const yearLabel = yearLabels[yearKey] || yearKey;
+      const yearSnap = state.data[yearKey];
+
+      Object.entries(yearSnap).forEach(([catKey, catSnap]) => {
+        Object.entries(catSnap.items || {}).forEach(([name, item]) => {
+          rows.push({
+            year: yearLabel,
+            category: CAT_LABELS[catKey] || catKey,
+            item: name,
+            budget: item.budget || 0,
+            actual: item.actual || 0,
+            variance: (item.budget || 0) - (item.actual || 0),
+            monthlyBudget: item.monthlyBudget || [],
+            monthlyActual: item.monthlyActual || [],
+          });
+        });
+      });
+    });
+
+    fetch(SHEETS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timestamp: new Date().toISOString(), rows }),
+      mode: 'no-cors',
+    }).then(() => console.log('Synced to Google Sheets'))
+      .catch(e => console.warn('Google Sheets sync failed:', e));
+  }, 2000);
 }
 
 // Init sliders from restored state (without resetting sliderValues)
@@ -1798,6 +1898,7 @@ document.getElementById('btnApplyBudget')?.addEventListener('click', applyAsBudg
 // Wire up header buttons
 document.getElementById('btnExport')?.addEventListener('click', exportData);
 document.getElementById('btnImport')?.addEventListener('click', importData);
+document.getElementById('btnSpreadsheet')?.addEventListener('click', exportSpreadsheet);
 
 // ========== INIT ==========
 Chart.defaults.font.family = 'system-ui, Avenir, Helvetica, Arial, sans-serif';
@@ -1817,8 +1918,15 @@ function initApp(hasState) {
 // Init with defaults immediately so page isn't blank
 initApp(false);
 
-// Then try loading saved data (server first, then localStorage)
+// Then try loading config + saved data (server first, then localStorage)
 (async () => {
+  // Load config (Google Sheets webhook URL etc)
+  try {
+    const cfgRes = await fetch('/api/config');
+    const cfg = await cfgRes.json();
+    if (cfg.sheetsWebhook) window.GOOGLE_SHEETS_WEBHOOK = cfg.sheetsWebhook;
+  } catch (e) { /* config optional */ }
+
   let loaded = false;
   try {
     const res = await fetch('/api/data');

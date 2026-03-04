@@ -6,6 +6,7 @@ const PORT = process.env.PORT || 3002;
 
 // Persistent data directory — use Railway volume mount if available, else local
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const SHEETS_WEBHOOK = process.env.GOOGLE_SHEETS_WEBHOOK || '';
 const DATA_FILE = path.join(DATA_DIR, 'budget-data.json');
 
 // Ensure data directory exists
@@ -43,6 +44,13 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
+    return;
+  }
+
+  // === API: Config (exposes non-sensitive env vars to frontend) ===
+  if (req.url === '/api/config' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ sheetsWebhook: SHEETS_WEBHOOK }));
     return;
   }
 
