@@ -96,7 +96,7 @@ const LOGIN_PAGE = `<!DOCTYPE html>
 // ========== Google Sheets Sync ==========
 const CAT_LABELS = {
   ppc: 'PPC + Ads', design: 'Design', merch: 'Printing / Merch',
-  events: 'Events', website: 'Website, Software + AI', content: 'Content', contingency: 'Contingency'
+  events: 'Events', website: 'Website + Software', ai: 'AI', content: 'Content', contingency: 'Contingency'
 };
 const MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
 

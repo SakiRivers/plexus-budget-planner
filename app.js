@@ -2,7 +2,7 @@
 const MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
 const COLORS = {
   ppc: '#414bc8', design: '#92cec1', merch: '#e8825c',
-  events: '#2ba88a', website: '#5b9bd5', content: '#7b6fa6', contingency: '#d7b4c0'
+  events: '#2ba88a', website: '#5b9bd5', ai: '#9b59b6', content: '#7b6fa6', contingency: '#d7b4c0'
 };
 const C = {
   bg:'#efefef', card:'#ffffff', border:'#d6d6df', text:'#454559', dim:'#7a7a8e',
@@ -11,9 +11,9 @@ const C = {
 };
 const CAT_LABELS = {
   ppc: 'PPC + Ads', design: 'Design', merch: 'Printing / Merch',
-  events: 'Events', website: 'Website, Software + AI', content: 'Content', contingency: 'Contingency'
+  events: 'Events', website: 'Website + Software', ai: 'AI', content: 'Content', contingency: 'Contingency'
 };
-const CAT_KEYS = ['ppc','design','merch','events','website','content','contingency'];
+const CAT_KEYS = ['ppc','design','merch','events','website','ai','content','contingency'];
 
 // FY 2025/26 data
 const data2026 = {
@@ -65,20 +65,29 @@ const data2026 = {
       }
     },
     website: {
-      budget: 15928, actual: 14893,
-      monthlyBudget: [201,190,310,465,283,265,265,265,265,365,362,362],
-      monthlyActual: [197,186,344,336,265,295,287,354,333,432,362,362],
+      budget: 14855, actual: 13822,
+      monthlyBudget: [184,173,293,373,191,173,173,173,173,273,173,173],
+      monthlyActual: [180,169,327,244,173,205,195,262,241,340,173,173],
       items: {
         'Maintenance': { budget: 11130, actual: 11140, monthlyBudget: [928,928,928,928,928,928,928,928,928,928,928,922], monthlyActual: [920,920,930,930,930,930,930,930,930,930,930,930] },
         'Build': { budget: 1200, actual: 0, monthlyBudget: [100,100,100,100,100,100,100,100,100,100,100,100], monthlyActual: [0,0,0,0,0,0,0,0,0,0,0,0] },
         'Canva': { budget: 100, actual: 100, monthlyBudget: [0,0,0,0,0,0,0,0,0,100,0,0], monthlyActual: [0,0,0,0,0,0,0,0,0,100,0,0] },
         'Twitter Premium': { budget: 1920, actual: 1920, monthlyBudget: [160,160,160,160,160,160,160,160,160,160,160,160], monthlyActual: [160,160,160,160,160,160,160,160,160,160,160,160] },
         'CapCut': { budget: 233, actual: 55, monthlyBudget: [19,19,19,19,19,19,19,19,19,19,19,24], monthlyActual: [11,0,0,0,0,0,22,22,0,0,0,0] },
-        'ChatGPT': { budget: 204, actual: 202, monthlyBudget: [17,17,17,17,17,17,17,17,17,17,17,17], monthlyActual: [17,17,17,17,17,15,17,17,17,17,17,17] },
         'MISC': { budget: 0, actual: 339, monthlyBudget: [0,0,0,0,0,0,0,0,0,0,0,0], monthlyActual: [0,0,34,71,0,32,0,67,68,67,0,0] },
-        'AmIonAI': { budget: 869, actual: 869, monthlyBudget: [0,0,0,75,75,75,75,75,75,75,172,172], monthlyActual: [0,0,0,75,75,75,75,75,75,75,172,172] },
         'QRFY': { budget: 120, actual: 120, monthlyBudget: [0,0,120,0,0,0,0,0,0,0,0,0], monthlyActual: [0,0,120,0,0,0,0,0,0,0,0,0] },
         'Calendly': { budget: 152, actual: 148, monthlyBudget: [13,13,13,13,13,13,13,13,13,13,13,9], monthlyActual: [9,9,13,13,13,13,13,13,13,13,13,13] }
+      }
+    },
+    ai: {
+      budget: 1073, actual: 1071,
+      monthlyBudget: [17,17,17,92,92,92,92,92,92,92,189,189],
+      monthlyActual: [17,17,17,92,92,90,92,92,92,92,189,189],
+      items: {
+        'ChatGPT': { budget: 204, actual: 202, monthlyBudget: [17,17,17,17,17,17,17,17,17,17,17,17], monthlyActual: [17,17,17,17,17,15,17,17,17,17,17,17] },
+        'AmIonAI': { budget: 869, actual: 869, monthlyBudget: [0,0,0,75,75,75,75,75,75,75,172,172], monthlyActual: [0,0,0,75,75,75,75,75,75,75,172,172] },
+        'Claude': { budget: 0, actual: 0, monthlyBudget: [0,0,0,0,0,0,0,0,0,0,0,0], monthlyActual: [0,0,0,0,0,0,0,0,0,0,0,0] },
+        'Geonimo': { budget: 0, actual: 0, monthlyBudget: [0,0,0,0,0,0,0,0,0,0,0,0], monthlyActual: [0,0,0,0,0,0,0,0,0,0,0,0] }
       }
     },
     content: {
@@ -146,15 +155,22 @@ const data2024_45k = {
       }
     },
     website: {
-      budget: 12540, actual: 10710,
-      monthlyBudget: [147,151,180,180,53,53,53,205,205,301,205,277],
-      monthlyActual: [158,160,163,36,49,24,24,195,315,328,200,318],
+      budget: 12348, actual: 10516,
+      monthlyBudget: [131,135,164,164,37,37,37,189,189,285,189,261],
+      monthlyActual: [141,144,147,20,33,8,8,179,299,312,183,302],
       items: {
         'Maintenance': { budget: 9000, actual: 7360, monthlyBudget: [750,750,750,750,750,750,750,750,750,750,750,750], monthlyActual: [0,0,0,0,920,920,920,920,920,920,920,920] },
         'Build': { budget: 1500, actual: 1380, monthlyBudget: [0,1500,0,0,0,0,0,0,0,0,0,0], monthlyActual: [0,1380,0,0,0,0,0,0,0,0,0,0] },
         'Twitter Premium': { budget: 856, actual: 880, monthlyBudget: [71,71,71,71,71,71,71,71,71,71,71,75], monthlyActual: [8,8,8,8,8,8,8,168,168,168,160,160] },
-        'ChatGPT': { budget: 192, actual: 194, monthlyBudget: [16,16,16,16,16,16,16,16,16,16,16,16], monthlyActual: [17,16,16,16,16,16,16,16,16,16,17,16] },
         'Calendly': { budget: 126, actual: 44, monthlyBudget: [11,11,11,11,11,11,11,11,11,11,11,5], monthlyActual: [0,0,0,12,0,0,0,0,0,9,12,11] }
+      }
+    },
+    ai: {
+      budget: 192, actual: 194,
+      monthlyBudget: [16,16,16,16,16,16,16,16,16,16,16,16],
+      monthlyActual: [17,16,16,16,16,16,16,16,16,16,17,16],
+      items: {
+        'ChatGPT': { budget: 192, actual: 194, monthlyBudget: [16,16,16,16,16,16,16,16,16,16,16,16], monthlyActual: [17,16,16,16,16,16,16,16,16,16,17,16] }
       }
     },
     content: {
@@ -220,7 +236,7 @@ const deals2425 = [
 const SOURCE_TO_CATEGORY = {
   'Google':       'ppc',
   'Twitter':      'ppc',
-  'ChatGPT':      'website',
+  'ChatGPT':      'ai',
   'EthCC':        'events',
   'Token2049':    'events',
   'Sarah Panel':  'events',
@@ -1372,6 +1388,58 @@ function getSerializableState() {
 
 function applyState(state) {
   if (!state || !state.version) return false;
+
+  // Migration: split AI items out of website category
+  const AI_ITEMS = ['ChatGPT', 'AmIonAI', 'Claude', 'Geonimo'];
+  if (state.data) {
+    Object.values(state.data).forEach(yearSnap => {
+      if (yearSnap.website && !yearSnap.ai) {
+        const websiteItems = yearSnap.website.items || {};
+        const aiItems = {};
+        let aiBudget = 0, aiActual = 0;
+        const aiMonthlyBudget = new Array(12).fill(0);
+        const aiMonthlyActual = new Array(12).fill(0);
+
+        AI_ITEMS.forEach(name => {
+          if (websiteItems[name]) {
+            aiItems[name] = websiteItems[name];
+            aiBudget += websiteItems[name].budget || 0;
+            aiActual += websiteItems[name].actual || 0;
+            const mb = websiteItems[name].monthlyBudget || [];
+            const ma = websiteItems[name].monthlyActual || [];
+            for (let m = 0; m < 12; m++) {
+              aiMonthlyBudget[m] += mb[m] || 0;
+              aiMonthlyActual[m] += ma[m] || 0;
+            }
+            delete websiteItems[name];
+          }
+        });
+
+        if (Object.keys(aiItems).length > 0) {
+          // Update website totals
+          yearSnap.website.budget = (yearSnap.website.budget || 0) - aiBudget;
+          yearSnap.website.actual = (yearSnap.website.actual || 0) - aiActual;
+          if (yearSnap.website.monthlyBudget) {
+            for (let m = 0; m < 12; m++) {
+              yearSnap.website.monthlyBudget[m] = (yearSnap.website.monthlyBudget[m] || 0) - aiMonthlyBudget[m];
+              yearSnap.website.monthlyActual[m] = (yearSnap.website.monthlyActual[m] || 0) - aiMonthlyActual[m];
+            }
+          }
+          // Create AI category
+          yearSnap.ai = {
+            budget: aiBudget, actual: aiActual,
+            monthlyBudget: aiMonthlyBudget, monthlyActual: aiMonthlyActual,
+            items: aiItems
+          };
+        }
+      }
+    });
+
+    // Also update sliderValues if present
+    if (state.sliderValues && state.sliderValues.website && !state.sliderValues.ai) {
+      state.sliderValues.ai = 0; // will be set from data
+    }
+  }
 
   if (state.data) {
     // Recreate FY 2026/27 dataset if it was saved
