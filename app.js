@@ -773,6 +773,9 @@ function renderROI() {
     return 0;
   });
 
+  // Pre-compute total revenue for percentage calculation
+  const grandTotalRev = catRows.reduce((s, r) => s + r.rev, 0) + unattributedRevenue;
+
   catRows.forEach(({ k, budget, spend, rev, dCount, roi }) => {
     const cpd = dCount > 0 ? spend / dCount : 0;
 
@@ -785,6 +788,7 @@ function renderROI() {
     const roiColor = rev === 0 && spend === 0 ? '#7a7a8e' : (roi >= 1 ? '#2ba88a' : (spend > 0 ? '#c0415d' : '#7a7a8e'));
     const effPct = spend > 0 ? Math.min((rev / spend) * 100, 100) : 0;
     const effBarColor = roi >= 1 ? '#2ba88a' : '#e8825c';
+    const revPct = grandTotalRev > 0 && rev > 0 ? (rev / grandTotalRev * 100).toFixed(1) + '%' : '—';
 
     const tr = document.createElement('tr');
     tr.className = 'border-t border-plx-border';
@@ -800,6 +804,7 @@ function renderROI() {
       <td class="text-right px-2 font-mono font-medium" style="color:#2ba88a">${rev > 0 ? fmt(rev) : '—'}</td>
       <td class="text-right px-2 font-mono">${dCount > 0 ? dCount : '—'}</td>
       <td class="text-right px-2 font-mono font-semibold" style="color:${roiColor}">${rev > 0 || spend > 0 ? roiDisplay : '—'}</td>
+      <td class="text-right px-2 font-mono text-plx-dim">${revPct}</td>
       <td class="text-right px-2 font-mono text-plx-dim">${dCount > 0 ? fmt(cpd) : '—'}</td>
       <td class="pl-3"><div class="w-full h-2 bg-plx-bg rounded-full overflow-hidden"><div class="h-full rounded-full transition-all" style="width:${Math.min(effPct, 100)}%; background:${effBarColor}"></div></div></td>
     `;
@@ -817,6 +822,7 @@ function renderROI() {
       <td class="text-right px-2 font-mono font-medium" style="color:#2ba88a">${fmt(unattributedRevenue)}</td>
       <td class="text-right px-2 font-mono">${unattributedDeals}</td>
       <td class="text-right px-2 font-mono text-plx-dim">—</td>
+      <td class="text-right px-2 font-mono text-plx-dim">${grandTotalRev > 0 ? (unattributedRevenue / grandTotalRev * 100).toFixed(1) + '%' : '—'}</td>
       <td class="text-right px-2 font-mono text-plx-dim">—</td>
       <td class="pl-3"></td>
     `;
@@ -837,6 +843,7 @@ function renderROI() {
     <td class="text-right px-2 font-mono" style="color:#2ba88a">${fmt(totalRevSum)}</td>
     <td class="text-right px-2 font-mono">${totalDealsSum}</td>
     <td class="text-right px-2 font-mono text-plx-blue">${totROI}</td>
+    <td class="text-right px-2 font-mono text-plx-text">100%</td>
     <td class="text-right px-2 font-mono text-plx-dim">${totCPD}</td>
     <td class="pl-3"></td>
   `;
