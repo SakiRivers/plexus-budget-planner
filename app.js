@@ -665,9 +665,8 @@ function renderTracking() {
 // ========== ROI ANALYSIS ==========
 function renderROI() {
   const data = getData();
-  // For the planned 2027 year, show 2026 deals as reference (most recent actuals)
-  const dealYear = dealsByYear[currentYear] ? currentYear : '2026';
-  const deals = dealsByYear[dealYear] || [];
+  const deals = dealsByYear[currentYear] || [];
+  const hasDeals = deals.length > 0;
 
   // Compute revenue per category from deals
   const catRevenue = {};
@@ -693,22 +692,18 @@ function renderROI() {
 
   const totalRevenue = deals.reduce((s, d) => s + d.fee, 0);
   const totalActual = CAT_KEYS.reduce((s, k) => s + (data.categories[k]?.actual || 0), 0);
-  // For planned years with no actuals yet, use budget as reference spend
-  const isPlanned = totalActual === 0 && dealYear !== currentYear;
-  const totalSpend = isPlanned
-    ? CAT_KEYS.reduce((s, k) => s + (data.categories[k]?.budget || 0), 0)
-    : totalActual;
+  const isPlanned = !hasDeals;
+  const totalSpend = totalActual;
   const overallROI = totalSpend > 0 ? totalRevenue / totalSpend : 0;
   const costPerDeal = deals.length > 0 ? totalSpend / deals.length : 0;
 
   // KPI Cards
-  document.getElementById('roiRevenue').textContent = fmt(totalRevenue);
-  const dealNote = dealYear !== currentYear ? ` (FY 25/26 deals as reference)` : '';
-  document.getElementById('roiDealCount').textContent = `${deals.length} deals closed${dealNote}`;
-  document.getElementById('roiSpend').textContent = fmt(totalSpend);
-  document.getElementById('roiSpendNote').textContent = isPlanned ? 'Planned budget (no actuals yet)' : 'Actual spend year-to-date';
-  document.getElementById('roiOverall').textContent = overallROI.toFixed(1) + 'x';
-  document.getElementById('roiCostPerDeal').textContent = fmt(costPerDeal);
+  document.getElementById('roiRevenue').textContent = hasDeals ? fmt(totalRevenue) : '—';
+  document.getElementById('roiDealCount').textContent = hasDeals ? `${deals.length} deals closed` : 'No deal data for this year';
+  document.getElementById('roiSpend').textContent = fmt(totalSpend || 0);
+  document.getElementById('roiSpendNote').textContent = totalActual > 0 ? 'Actual spend year-to-date' : 'No spend recorded yet';
+  document.getElementById('roiOverall').textContent = hasDeals && totalSpend > 0 ? overallROI.toFixed(1) + 'x' : '—';
+  document.getElementById('roiCostPerDeal').textContent = hasDeals ? fmt(costPerDeal) : '—';
 
   // === Revenue by Source doughnut ===
   const sourceEntries = Object.entries(sourceRevenue).sort((a, b) => b[1] - a[1]);
@@ -753,7 +748,7 @@ function renderROI() {
     const cat = data.categories[k];
     if (!cat) return null;
     const budget = cat.budget;
-    const spend = isPlanned ? cat.budget : cat.actual;
+    const spend = cat.actual;
     const rev = catRevenue[k];
     const dCount = catDeals[k];
     const roi = spend > 0 ? rev / spend : (rev > 0 ? Infinity : 0);
