@@ -193,7 +193,21 @@ const data2024_45k = {
   }
 };
 
-const datasets = { '2026': data2026, '2024-45k': data2024_45k };
+// Empty FY 2026/27 dataset — populated when user applies a budget or loads saved data
+const data2027 = {
+  totalBudget: 0,
+  categories: {}
+};
+CAT_KEYS.forEach(key => {
+  data2027.categories[key] = {
+    budget: 0, actual: 0,
+    monthlyBudget: new Array(12).fill(0),
+    monthlyActual: new Array(12).fill(0),
+    items: {}
+  };
+});
+
+const datasets = { '2027': data2027, '2026': data2026, '2024-45k': data2024_45k };
 
 // ========== DEAL DATA (from Plexus Dashboard) ==========
 const deals2526 = [
@@ -258,7 +272,7 @@ const SOURCE_TO_CATEGORY = {
 const dealsByYear = { '2026': deals2526, '2024-45k': deals2425 };
 
 // ========== STATE ==========
-let currentYear = '2026'; // for Tracking/Analysis/Details tabs only
+let currentYear = '2027'; // for Tracking/Analysis/Details tabs only
 let totalBudget = 100288; // modelling starts from FY 2025/26 baseline
 let sliderValues = {};
 let lockedCategories = new Set();
@@ -1521,15 +1535,6 @@ function applyState(state) {
         };
       });
       datasets['2027'] = newData;
-
-      // Add to year selector
-      const yearSelect = document.getElementById('yearSelect');
-      if (yearSelect && !yearSelect.querySelector('option[value="2027"]')) {
-        const opt = document.createElement('option');
-        opt.value = '2027';
-        opt.textContent = 'FY 2026/27 (Planned)';
-        yearSelect.insertBefore(opt, yearSelect.firstChild);
-      }
     }
 
     // Restore other years
@@ -1929,16 +1934,8 @@ function applyAsBudget() {
   // Register the new dataset
   datasets['2027'] = newData;
 
-  // Add to year selector if not already there
-  const yearSelect = document.getElementById('yearSelect');
-  if (!yearSelect.querySelector('option[value="2027"]')) {
-    const opt = document.createElement('option');
-    opt.value = '2027';
-    opt.textContent = 'FY 2026/27 (Planned)';
-    yearSelect.insertBefore(opt, yearSelect.firstChild);
-  }
-
   // Switch to the new year and show tracking
+  const yearSelect = document.getElementById('yearSelect');
   currentYear = '2027';
   yearSelect.value = '2027';
 
