@@ -1988,22 +1988,19 @@ function updateApplyButton() {
     btn.innerHTML = '<svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>FY 26/27 Budget Locked In';
     btn.className = 'ml-3 px-4 py-2 rounded-lg bg-plx-green text-white text-xs font-bold cursor-default';
     btn.title = 'Budget has been applied — adjust sliders and re-apply to update';
-    btn.onclick = (e) => {
-      e.preventDefault();
-      // Allow re-applying by resetting and calling applyAsBudget
-      if (confirm('FY 26/27 budget is already applied. Do you want to re-apply with your current slider values?')) {
-        applyAsBudget();
-      }
-    };
   } else {
     btn.innerHTML = '<svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Apply as FY 26/27 Budget';
     btn.className = 'ml-3 px-4 py-2 rounded-lg bg-plx-blue text-white text-xs font-bold hover:opacity-90 transition-opacity';
     btn.title = 'Save this model as the FY 2026/27 budget for tracking';
-    btn.onclick = null;
   }
 }
 
-document.getElementById('btnApplyBudget')?.addEventListener('click', applyAsBudget);
+document.getElementById('btnApplyBudget')?.addEventListener('click', () => {
+  if (budgetApplied) {
+    if (!confirm('FY 26/27 budget is already applied. Re-apply with current slider values?')) return;
+  }
+  applyAsBudget();
+});
 
 // Wire up header buttons
 document.getElementById('btnExport')?.addEventListener('click', exportData);
