@@ -345,12 +345,26 @@ function redistributeBudget() {
 // When a single category slider changes, adjust other unlocked categories
 function adjustOthers(changedKey, newValue) {
   const oldValue = sliderValues[changedKey];
+
+  // Calculate how much is locked (other locked categories)
+  const lockedTotal = CAT_KEYS
+    .filter(k => k !== changedKey && lockedCategories.has(k))
+    .reduce((s, k) => s + (sliderValues[k] || 0), 0);
+
+  // Cap: this slider can't exceed totalBudget minus locked amounts
+  const maxAllowed = Math.max(0, totalBudget - lockedTotal);
+  if (newValue > maxAllowed) {
+    newValue = maxAllowed;
+    showBudgetWarning();
+  } else {
+    hideBudgetWarning();
+  }
+
   const delta = newValue - oldValue;
   sliderValues[changedKey] = newValue;
 
   const unlocked = CAT_KEYS.filter(k => k !== changedKey && !lockedCategories.has(k));
   if (unlocked.length === 0) {
-    // Nothing else to adjust
     updateSliderUI(changedKey);
     return;
   }
@@ -368,6 +382,34 @@ function adjustOthers(changedKey, newValue) {
   });
 
   updateSliderUI(changedKey);
+}
+
+let _budgetWarningTimer = null;
+function showBudgetWarning() {
+  let el = document.getElementById('budgetWarning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'budgetWarning';
+    el.className = 'text-sm font-medium px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-plx-red flex items-center gap-2 transition-opacity duration-300';
+    el.innerHTML = '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>Budget limit reached — reduce another category or increase total budget';
+    const container = document.getElementById('slidersContainer');
+    container?.parentElement?.insertBefore(el, container);
+  }
+  el.style.opacity = '1';
+  el.style.display = 'flex';
+  clearTimeout(_budgetWarningTimer);
+  _budgetWarningTimer = setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => { el.style.display = 'none'; }, 300);
+  }, 3000);
+}
+
+function hideBudgetWarning() {
+  const el = document.getElementById('budgetWarning');
+  if (el) {
+    el.style.opacity = '0';
+    setTimeout(() => { el.style.display = 'none'; }, 300);
+  }
 }
 
 function updateSliderUI(key) {
