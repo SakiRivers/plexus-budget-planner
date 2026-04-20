@@ -277,6 +277,7 @@ let totalBudget = 100288; // modelling starts from FY 2025/26 baseline
 let sliderValues = {};
 let lockedCategories = new Set();
 let charts = {};
+let budgetApplied = false; // tracks whether FY 26/27 budget has been locked in
 
 // Budget Modelling always uses data2026 (FY 2025/26) as baseline
 function getModelBaseline() { return data2026; }
@@ -338,6 +339,19 @@ document.getElementById('totalBudgetInput').addEventListener('input', (e) => {
 });
 
 // ========== REDISTRIBUTION LOGIC ==========
+// Fix rounding so allocated total always equals totalBudget exactly
+function fixRounding(keys) {
+  if (keys.length === 0) return;
+  const total = CAT_KEYS.reduce((s, k) => s + (sliderValues[k] || 0), 0);
+  const diff = totalBudget - total;
+  if (diff !== 0) {
+    // Apply correction to the last unlocked category
+    const lastKey = keys[keys.length - 1];
+    sliderValues[lastKey] = Math.max(0, (sliderValues[lastKey] || 0) + diff);
+    updateSliderUI(lastKey);
+  }
+}
+
 // When total budget changes, redistribute proportionally among unlocked categories
 function redistributeBudget() {
   const lockedTotal = CAT_KEYS.reduce((s, k) => s + (lockedCategories.has(k) ? (sliderValues[k] || 0) : 0), 0);
@@ -354,6 +368,7 @@ function redistributeBudget() {
     }
     updateSliderUI(key);
   });
+  fixRounding(unlocked);
 }
 
 // When a single category slider changes, adjust other unlocked categories
@@ -396,6 +411,7 @@ function adjustOthers(changedKey, newValue) {
   });
 
   updateSliderUI(changedKey);
+  fixRounding(unlocked);
 }
 
 let _budgetWarningTimer = null;
@@ -1440,6 +1456,7 @@ function getSerializableState() {
     sliderValues: { ...sliderValues },
     lockedCategories: [...lockedCategories],
     currentYear,
+    budgetApplied,
     data: dataSnapshot
   };
 }
@@ -1591,6 +1608,7 @@ function applyState(state) {
   if (state.sliderValues) sliderValues = { ...state.sliderValues };
   if (state.lockedCategories) lockedCategories = new Set(state.lockedCategories);
   if (state.currentYear && datasets[state.currentYear]) currentYear = state.currentYear;
+  if (state.budgetApplied) budgetApplied = true;
 
   return true;
 }
@@ -1939,7 +1957,11 @@ function applyAsBudget() {
   currentYear = '2027';
   yearSelect.value = '2027';
 
+  budgetApplied = true;
   saveToLocalStorage();
+
+  // Update button to show locked-in state
+  updateApplyButton();
 
   // Show confirmation
   const el = document.getElementById('saveIndicator');
@@ -1959,6 +1981,28 @@ function applyAsBudget() {
   renderTracking();
 }
 
+function updateApplyButton() {
+  const btn = document.getElementById('btnApplyBudget');
+  if (!btn) return;
+  if (budgetApplied) {
+    btn.innerHTML = '<svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>FY 26/27 Budget Locked In';
+    btn.className = 'ml-3 px-4 py-2 rounded-lg bg-plx-green text-white text-xs font-bold cursor-default';
+    btn.title = 'Budget has been applied — adjust sliders and re-apply to update';
+    btn.onclick = (e) => {
+      e.preventDefault();
+      // Allow re-applying by resetting and calling applyAsBudget
+      if (confirm('FY 26/27 budget is already applied. Do you want to re-apply with your current slider values?')) {
+        applyAsBudget();
+      }
+    };
+  } else {
+    btn.innerHTML = '<svg class="inline w-3.5 h-3.5 mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Apply as FY 26/27 Budget';
+    btn.className = 'ml-3 px-4 py-2 rounded-lg bg-plx-blue text-white text-xs font-bold hover:opacity-90 transition-opacity';
+    btn.title = 'Save this model as the FY 2026/27 budget for tracking';
+    btn.onclick = null;
+  }
+}
+
 document.getElementById('btnApplyBudget')?.addEventListener('click', applyAsBudget);
 
 // Wire up header buttons
@@ -1974,6 +2018,7 @@ function initApp(hasState) {
     initSlidersFromState();
     const yearSelect = document.getElementById('yearSelect');
     if (yearSelect && datasets[currentYear]) yearSelect.value = currentYear;
+    updateApplyButton();
   } else {
     initSliders();
   }
