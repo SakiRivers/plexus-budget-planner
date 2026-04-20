@@ -2016,6 +2016,8 @@ function initApp(hasState) {
     const yearSelect = document.getElementById('yearSelect');
     if (yearSelect && datasets[currentYear]) yearSelect.value = currentYear;
     updateApplyButton();
+    // Ensure saved slider values match totalBudget (fixes stale data from before rounding fix)
+    redistributeBudget();
   } else {
     initSliders();
   }
