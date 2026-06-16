@@ -7,5 +7,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@clerk/express": "^2.1.27",
+    "express": "^5.2.1"
   }
 }

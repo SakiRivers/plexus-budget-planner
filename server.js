@@ -1,11 +1,10 @@
-const http = require('http');
 const https = require('https');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
+const { clerkMiddleware, getAuth, clerkClient } = require('@clerk/express');
 
 const PORT = process.env.PORT || 3002;
-const APP_PASSWORD = process.env.APP_PASSWORD || '';
 
 // Persistent data directory — use Railway volume mount if available, else local
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -14,6 +13,10 @@ const SHEETS_WEBHOOK = process.env.GOOGLE_SHEETS_WEBHOOK || '';
 const DASHBOARD_URL = process.env.PLEXUS_DASHBOARD_URL || '';
 const DATA_FILE = path.join(DATA_DIR, 'budget-data.json');
 const MAX_BACKUPS = 30; // keep ~30 snapshots, rolled by save time
+
+// Clerk's hosted sign-in for this instance. Unauthenticated visitors are
+// sent here and bounced back after signing in.
+const SIGN_IN_BASE = 'https://fluent-humpback-32.accounts.dev/sign-in';
 
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -73,81 +76,25 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// ========== Auth ==========
-// Simple token-based auth: password → session token stored in cookie
-const activeSessions = new Set();
+// ========== Auth (Clerk) ==========
+// Access requires a signed-in Plexus user with the admin role. Admin status
+// is cached briefly per user so we don't call Clerk on every asset request.
+const ADMIN_TTL_MS = 5 * 60 * 1000;
+const adminCache = new Map(); // userId -> { isAdmin, exp }
 
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
+async function isAdmin(userId) {
+  const cached = adminCache.get(userId);
+  if (cached && cached.exp > Date.now()) return cached.isAdmin;
+  let ok = false;
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    ok = user.publicMetadata?.role === 'admin';
+  } catch (e) {
+    console.warn('Clerk getUser failed:', e.message);
+  }
+  adminCache.set(userId, { isAdmin: ok, exp: Date.now() + ADMIN_TTL_MS });
+  return ok;
 }
-
-function parseCookies(req) {
-  const cookies = {};
-  (req.headers.cookie || '').split(';').forEach(c => {
-    const [k, v] = c.trim().split('=');
-    if (k && v) cookies[k] = v;
-  });
-  return cookies;
-}
-
-function isAuthenticated(req) {
-  if (!APP_PASSWORD) return true; // no password set = open access
-  const cookies = parseCookies(req);
-  return cookies.plx_session && activeSessions.has(cookies.plx_session);
-}
-
-const LOGIN_PAGE = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plexus Budget Planner — Login</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: { extend: { colors: { plx: { bg:'#efefef', card:'#ffffff', border:'#d6d6df', text:'#454559', dim:'#7a7a8e', blue:'#414bc8', green:'#2ba88a', red:'#c0415d' } } } }
-    }
-  </script>
-  <style>body { font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; background: #efefef; }</style>
-</head>
-<body class="min-h-screen flex items-center justify-center">
-  <div class="bg-white border border-plx-border rounded-2xl shadow-lg p-8 w-full max-w-sm">
-    <div class="text-center mb-6">
-      <h1 class="text-xl font-bold text-plx-text">Plexus <span class="text-plx-blue">Budget Planner</span></h1>
-      <p class="text-sm text-plx-dim mt-1">Enter password to continue</p>
-    </div>
-    <form id="loginForm" class="space-y-4">
-      <input type="password" id="pwd" autofocus autocomplete="current-password"
-        class="w-full px-4 py-3 rounded-xl border border-plx-border text-plx-text outline-none focus:border-plx-blue transition-colors"
-        placeholder="Password" />
-      <button type="submit"
-        class="w-full py-3 rounded-xl bg-plx-blue text-white font-semibold hover:opacity-90 transition-opacity">
-        Sign In
-      </button>
-      <p id="error" class="text-sm text-plx-red text-center hidden">Incorrect password</p>
-    </form>
-  </div>
-  <script>
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const pwd = document.getElementById('pwd').value;
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd }),
-      });
-      const json = await res.json();
-      if (json.ok) {
-        window.location.reload();
-      } else {
-        document.getElementById('error').classList.remove('hidden');
-        document.getElementById('pwd').value = '';
-        document.getElementById('pwd').focus();
-      }
-    });
-  </script>
-</body>
-</html>`;
 
 // ========== Google Sheets Sync ==========
 const CAT_LABELS = {
@@ -216,7 +163,7 @@ function syncToSheets(state) {
   postToUrl(SHEETS_WEBHOOK, payload, 0);
 }
 
-// ========== Server ==========
+// ========== Static / MIME ==========
 const MIME_TYPES = {
   '.html': 'text/html',
   '.js': 'application/javascript',
@@ -233,55 +180,10 @@ function cors(res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
-const server = http.createServer((req, res) => {
+// The application's request logic. Auth is enforced upstream by Express
+// middleware, so every request reaching here is an authenticated admin.
+function handleApp(req, res) {
   cors(res);
-
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
-
-  // Health check (no auth needed)
-  if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
-    return;
-  }
-
-  // === Login endpoint (no auth needed) ===
-  if (req.url === '/api/login' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
-      try {
-        const { password } = JSON.parse(body);
-        if (password === APP_PASSWORD) {
-          const token = generateToken();
-          activeSessions.add(token);
-          res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Set-Cookie': `plx_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`,
-          });
-          res.end(JSON.stringify({ ok: true }));
-        } else {
-          res.writeHead(401, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'Wrong password' }));
-        }
-      } catch (e) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: false, error: 'Bad request' }));
-      }
-    });
-    return;
-  }
-
-  // === Auth check for everything else ===
-  if (!isAuthenticated(req)) {
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(LOGIN_PAGE);
-    return;
-  }
 
   // === API: Config ===
   if (req.url === '/api/config' && req.method === 'GET') {
@@ -413,12 +315,46 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': contentType });
     res.end(content);
   });
+}
+
+// ========== Server ==========
+const app = express();
+// Behind Railway's TLS-terminating proxy, so req.protocol reflects https.
+app.set('trust proxy', true);
+
+// Health check — public (Railway probes it; no auth).
+app.get('/health', (_req, res) => res.type('text').send('OK'));
+
+// CORS preflight — public.
+app.options(/.*/, (_req, res) => { cors(res); res.writeHead(204); res.end(); });
+
+// Clerk session parsing + handshake handling.
+app.use(clerkMiddleware());
+
+// Gate: signed-in Plexus user with the admin role.
+app.use(async (req, res, next) => {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    const back = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    return res.redirect(`${SIGN_IN_BASE}?redirect_url=${encodeURIComponent(back)}`);
+  }
+  if (!(await isAdmin(userId))) {
+    res.status(403).type('html').send(
+      '<div style="font-family:system-ui;max-width:32rem;margin:4rem auto;text-align:center">' +
+      '<h1>Plexus admins only</h1><p>This tool is restricted. Ask Sarah if you need access.</p></div>'
+    );
+    return;
+  }
+  next();
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+// Everything else → the application logic (authenticated admins only).
+app.use((req, res) => handleApp(req, res));
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Plexus Budget Planner running on port ${PORT}`);
   console.log(`Data stored in: ${DATA_FILE}`);
-  console.log(`Password protection: ${APP_PASSWORD ? 'ENABLED' : 'disabled (no APP_PASSWORD set)'}`);
+  console.log(`Auth: Clerk (admin role required)`);
   console.log(`Google Sheets sync: ${SHEETS_WEBHOOK ? 'ENABLED' : 'disabled'}`);
   console.log(`Dashboard integration: ${DASHBOARD_URL ? `ENABLED (${DASHBOARD_URL})` : 'disabled (no PLEXUS_DASHBOARD_URL set)'}`);
   console.log(`Backups: keeping last ${MAX_BACKUPS} snapshots in ${BACKUP_DIR}`);
