@@ -9,9 +9,35 @@ const APP_PASSWORD = process.env.APP_PASSWORD || '';
 
 // Persistent data directory — use Railway volume mount if available, else local
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const SHEETS_WEBHOOK = process.env.GOOGLE_SHEETS_WEBHOOK || '';
 const DASHBOARD_URL = process.env.PLEXUS_DASHBOARD_URL || '';
 const DATA_FILE = path.join(DATA_DIR, 'budget-data.json');
+const MAX_BACKUPS = 30; // keep ~30 snapshots, rolled by save time
+
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+// Write a timestamped backup of the previous data file before overwriting,
+// and prune to the most recent MAX_BACKUPS.
+function backupAndPrune() {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return;
+    const prev = fs.readFileSync(DATA_FILE, 'utf8');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.writeFileSync(path.join(BACKUP_DIR, `budget-data.${ts}.bak.json`), prev, 'utf8');
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.endsWith('.bak.json'))
+      .map(f => ({ f, t: fs.statSync(path.join(BACKUP_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t);
+    files.slice(MAX_BACKUPS).forEach(({ f }) => {
+      try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch (_) {}
+    });
+  } catch (e) {
+    console.warn('Backup failed:', e.message);
+  }
+}
 
 // Cache dashboard data for 60s to avoid hitting Google Sheets quota
 let _dashboardCache = { data: null, fetchedAt: 0 };
@@ -304,6 +330,46 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // === API: List backups ===
+  if (req.url === '/api/backups' && req.method === 'GET') {
+    try {
+      const files = fs.readdirSync(BACKUP_DIR)
+        .filter(f => f.endsWith('.bak.json'))
+        .map(f => {
+          const stat = fs.statSync(path.join(BACKUP_DIR, f));
+          return { name: f, savedAt: stat.mtime.toISOString(), bytes: stat.size };
+        })
+        .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, backups: files }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: e.message }));
+    }
+    return;
+  }
+
+  // === API: Read a specific backup ===
+  if (req.url.startsWith('/api/backup/') && req.method === 'GET') {
+    const name = path.basename(req.url.split('?')[0].slice('/api/backup/'.length));
+    if (!name.endsWith('.bak.json')) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'Invalid backup name' }));
+      return;
+    }
+    const fp = path.join(BACKUP_DIR, name);
+    fs.readFile(fp, 'utf8', (err, content) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Not found' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, data: JSON.parse(content) }));
+    });
+    return;
+  }
+
   // === API: Save data ===
   if (req.url === '/api/data' && req.method === 'POST') {
     let body = '';
@@ -311,6 +377,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const parsed = JSON.parse(body);
+        backupAndPrune(); // snapshot previous file before overwriting
         fs.writeFile(DATA_FILE, JSON.stringify(parsed, null, 2), 'utf8', (err) => {
           if (err) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -354,4 +421,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Password protection: ${APP_PASSWORD ? 'ENABLED' : 'disabled (no APP_PASSWORD set)'}`);
   console.log(`Google Sheets sync: ${SHEETS_WEBHOOK ? 'ENABLED' : 'disabled'}`);
   console.log(`Dashboard integration: ${DASHBOARD_URL ? `ENABLED (${DASHBOARD_URL})` : 'disabled (no PLEXUS_DASHBOARD_URL set)'}`);
+  console.log(`Backups: keeping last ${MAX_BACKUPS} snapshots in ${BACKUP_DIR}`);
 });
