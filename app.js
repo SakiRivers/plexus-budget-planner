@@ -1900,6 +1900,7 @@ function showImportSuccess() {
 // ========== APPLY AS FY 2026/27 BUDGET ==========
 function applyAsBudget() {
   const baseline = getModelBaseline(); // FY 2025/26
+  const existing = datasets['2027']; // preserve actuals from any prior application
 
   // Build a new dataset from the current slider values
   const newData = { totalBudget: totalBudget, categories: {} };
@@ -1908,6 +1909,8 @@ function applyAsBudget() {
     const baseCat = baseline.categories[key];
     if (!baseCat) return;
     const newBudget = sliderValues[key] || 0;
+    const existingCat = existing?.categories?.[key];
+    const existingItems = existingCat?.items || {};
 
     // Distribute monthly budget proportionally from baseline pattern
     const baseMonthlyTotal = baseCat.monthlyBudget.reduce((a,b) => a+b, 0);
@@ -1946,11 +1949,12 @@ function applyAsBudget() {
         itemMonthlyBudget = new Array(12).fill(perMonth);
         itemMonthlyBudget[11] += itemBudget - (perMonth * 12);
       }
+      const existingItem = existingItems[name];
       items[name] = {
         budget: itemBudget,
-        actual: 0,
+        actual: existingItem?.actual || 0,
         monthlyBudget: itemMonthlyBudget,
-        monthlyActual: new Array(12).fill(0)
+        monthlyActual: existingItem?.monthlyActual ? [...existingItem.monthlyActual] : new Array(12).fill(0)
       };
     });
 
@@ -1961,9 +1965,9 @@ function applyAsBudget() {
 
     newData.categories[key] = {
       budget: newBudget,
-      actual: 0,
+      actual: existingCat?.actual || 0,
       monthlyBudget,
-      monthlyActual: new Array(12).fill(0),
+      monthlyActual: existingCat?.monthlyActual ? [...existingCat.monthlyActual] : new Array(12).fill(0),
       items
     };
   });
