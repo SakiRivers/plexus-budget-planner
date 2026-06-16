@@ -320,10 +320,23 @@ function syncTotalBudgetUI() {
     `linear-gradient(to right, ${C.blue} ${pct}%, ${C.border} ${pct}%)`;
 }
 
-document.getElementById('totalBudgetSlider').addEventListener('input', (e) => {
+// Capture baseline values when drag begins so redistribution is stable across the drag
+let _dragBaseline = null;
+function captureDragBaseline() {
+  _dragBaseline = {
+    sliderValues: { ...sliderValues },
+    lockedTotal: CAT_KEYS.reduce((s, k) => s + (lockedCategories.has(k) ? (sliderValues[k] || 0) : 0), 0),
+  };
+}
+function clearDragBaseline() { _dragBaseline = null; }
+
+const _totalSlider = document.getElementById('totalBudgetSlider');
+_totalSlider.addEventListener('pointerdown', captureDragBaseline);
+_totalSlider.addEventListener('pointerup', clearDragBaseline);
+_totalSlider.addEventListener('input', (e) => {
   totalBudget = parseInt(e.target.value);
   syncTotalBudgetUI();
-  redistributeBudget();
+  redistributeBudget(_dragBaseline);
   updatePlanner();
   saveToLocalStorage();
 });
@@ -353,16 +366,18 @@ function fixRounding(keys) {
 }
 
 // When total budget changes, redistribute proportionally among unlocked categories
-function redistributeBudget() {
-  const lockedTotal = CAT_KEYS.reduce((s, k) => s + (lockedCategories.has(k) ? (sliderValues[k] || 0) : 0), 0);
+// Pass a baseline (snapshot from drag start) to avoid drift from repeated rounding
+function redistributeBudget(baseline) {
+  const source = baseline ? baseline.sliderValues : sliderValues;
+  const lockedTotal = CAT_KEYS.reduce((s, k) => s + (lockedCategories.has(k) ? (source[k] || 0) : 0), 0);
   const available = Math.max(0, totalBudget - lockedTotal);
   const unlocked = CAT_KEYS.filter(k => !lockedCategories.has(k));
 
-  const unlockedTotal = unlocked.reduce((s, k) => s + (sliderValues[k] || 0), 0);
+  const unlockedTotal = unlocked.reduce((s, k) => s + (source[k] || 0), 0);
 
   unlocked.forEach(key => {
     if (unlockedTotal > 0) {
-      sliderValues[key] = Math.round((sliderValues[key] / unlockedTotal) * available);
+      sliderValues[key] = Math.round((source[key] / unlockedTotal) * available);
     } else {
       sliderValues[key] = Math.round(available / unlocked.length);
     }
