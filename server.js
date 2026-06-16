@@ -10,7 +10,37 @@ const APP_PASSWORD = process.env.APP_PASSWORD || '';
 // Persistent data directory — use Railway volume mount if available, else local
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const SHEETS_WEBHOOK = process.env.GOOGLE_SHEETS_WEBHOOK || '';
+const DASHBOARD_URL = process.env.PLEXUS_DASHBOARD_URL || '';
 const DATA_FILE = path.join(DATA_DIR, 'budget-data.json');
+
+// Cache dashboard data for 60s to avoid hitting Google Sheets quota
+let _dashboardCache = { data: null, fetchedAt: 0 };
+const DASHBOARD_CACHE_MS = 60 * 1000;
+
+function fetchDashboardData() {
+  return new Promise((resolve) => {
+    if (!DASHBOARD_URL) return resolve({ ok: false, error: 'PLEXUS_DASHBOARD_URL not set' });
+    if (_dashboardCache.data && Date.now() - _dashboardCache.fetchedAt < DASHBOARD_CACHE_MS) {
+      return resolve({ ok: true, data: _dashboardCache.data, cached: true });
+    }
+    const url = new URL('/api/data', DASHBOARD_URL);
+    https.get(url, (resp) => {
+      let body = '';
+      resp.on('data', (c) => { body += c; });
+      resp.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed.ok && parsed.data) {
+            _dashboardCache = { data: parsed.data, fetchedAt: Date.now() };
+          }
+          resolve(parsed);
+        } catch (e) {
+          resolve({ ok: false, error: 'Failed to parse dashboard response' });
+        }
+      });
+    }).on('error', (e) => resolve({ ok: false, error: e.message }));
+  });
+}
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -230,7 +260,33 @@ const server = http.createServer((req, res) => {
   // === API: Config ===
   if (req.url === '/api/config' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ sheetsWebhook: SHEETS_WEBHOOK ? true : false }));
+    res.end(JSON.stringify({
+      sheetsWebhook: SHEETS_WEBHOOK ? true : false,
+      dashboardConfigured: DASHBOARD_URL ? true : false,
+    }));
+    return;
+  }
+
+  // === API: Dashboard deals (proxied) ===
+  if (req.url === '/api/dashboard-deals' && req.method === 'GET') {
+    fetchDashboardData().then((result) => {
+      if (!result.ok || !result.data) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: result.error || 'No data', deals: null }));
+        return;
+      }
+      const d = result.data;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        ok: true,
+        cached: !!result.cached,
+        deals: {
+          '2027': d.deals2627 || [],
+          '2026': d.deals2526 || [],
+          '2024-45k': d.deals2425 || [],
+        },
+      }));
+    });
     return;
   }
 
@@ -297,4 +353,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Data stored in: ${DATA_FILE}`);
   console.log(`Password protection: ${APP_PASSWORD ? 'ENABLED' : 'disabled (no APP_PASSWORD set)'}`);
   console.log(`Google Sheets sync: ${SHEETS_WEBHOOK ? 'ENABLED' : 'disabled'}`);
+  console.log(`Dashboard integration: ${DASHBOARD_URL ? `ENABLED (${DASHBOARD_URL})` : 'disabled (no PLEXUS_DASHBOARD_URL set)'}`);
 });

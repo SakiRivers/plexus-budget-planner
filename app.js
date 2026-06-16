@@ -251,8 +251,10 @@ const SOURCE_TO_CATEGORY = {
   'Google':       'ppc',
   'Twitter':      'ppc',
   'ChatGPT':      'ai',
+  'GEO':          'ai',       // Generative Engine Optimization — AI-driven traffic
   'EthCC':        'events',
   'Token2049':    'events',
+  'Event':        'events',
   'Sarah Panel':  'events',
   'BGA/Sandbox':  'events',
   'Calendly':     'website',
@@ -261,6 +263,7 @@ const SOURCE_TO_CATEGORY = {
   'Email':        'content',
   'Farcaster':    'content',
   'Telegram':     'content',
+  'Socials':      'content',
   'Mondao':       'events',
   'Referral':     null,       // organic — no direct spend
   'Inbound':      null,
@@ -269,7 +272,8 @@ const SOURCE_TO_CATEGORY = {
   'Sarah':        'events',
 };
 
-const dealsByYear = { '2026': deals2526, '2024-45k': deals2425 };
+// Mutable so dashboard-fetched deals can replace the hardcoded snapshot
+const dealsByYear = { '2027': [], '2026': deals2526, '2024-45k': deals2425 };
 
 // ========== STATE ==========
 let currentYear = '2027'; // for Tracking/Analysis/Details tabs only
@@ -2054,21 +2058,47 @@ initApp(false);
       if (loaded) {
         console.log('Loaded data from server');
         initApp(true);
-        return;
       }
     }
   } catch (e) {
     console.warn('Server load failed:', e);
   }
 
-  // Fall back to localStorage
-  const localLoaded = loadFromLocalStorage();
-  if (localLoaded) {
-    console.log('Loaded data from localStorage');
-    initApp(true);
-    // Push to server if server was empty
-    saveToServer(getSerializableState());
-  } else {
-    console.log('No saved data found');
+  if (!loaded) {
+    // Fall back to localStorage
+    const localLoaded = loadFromLocalStorage();
+    if (localLoaded) {
+      console.log('Loaded data from localStorage');
+      initApp(true);
+      saveToServer(getSerializableState());
+    } else {
+      console.log('No saved data found');
+    }
   }
+
+  // Fetch live deals from the Plexus dashboard (proxied through server)
+  fetchDashboardDeals();
 })();
+
+async function fetchDashboardDeals() {
+  try {
+    const res = await fetch('/api/dashboard-deals');
+    const json = await res.json();
+    if (!json.ok || !json.deals) {
+      console.warn('Dashboard deals not available:', json.error);
+      return;
+    }
+    // Replace year buckets that the dashboard provides data for
+    Object.entries(json.deals).forEach(([yearKey, deals]) => {
+      if (Array.isArray(deals) && deals.length > 0) {
+        dealsByYear[yearKey] = deals;
+      }
+    });
+    console.log('Loaded deals from dashboard', Object.keys(json.deals).map(k => `${k}: ${json.deals[k]?.length || 0}`).join(', '));
+    // Re-render ROI if it's the active tab
+    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+    if (activeTab === 'roi') renderROI();
+  } catch (e) {
+    console.warn('Failed to fetch dashboard deals:', e);
+  }
+}
