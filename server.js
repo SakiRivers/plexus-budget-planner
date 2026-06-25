@@ -15,8 +15,12 @@ const DATA_FILE = path.join(DATA_DIR, 'budget-data.json');
 const MAX_BACKUPS = 30; // keep ~30 snapshots, rolled by save time
 
 // Clerk's hosted sign-in for this instance. Unauthenticated visitors are
-// sent here and bounced back after signing in.
-const SIGN_IN_BASE = 'https://fluent-humpback-32.accounts.dev/sign-in';
+// sent here and bounced back after signing in. Override with
+// CLERK_SIGN_IN_URL at cutover to production
+// (e.g. https://accounts.plexusrs.com/sign-in); defaults to the dev portal.
+const SIGN_IN_BASE =
+  process.env.CLERK_SIGN_IN_URL ||
+  'https://fluent-humpback-32.accounts.dev/sign-in';
 
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
